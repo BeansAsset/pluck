@@ -21,28 +21,6 @@ the original pixels, so you can select part of it with the mouse, or:
 - **Open** a link it found, **Email** an address, **Copy** a phone number
 - **Search** the web for it
 - **Show text** to check what was read, and **Edit** to fix it before copying
-- **Vertorama**: capture the whole of a scrolling area, not just what fits
-
-## Vertorama
-
-For a chat, a long web page or a document that doesn't fit on screen: select
-the scrolling area and press **Vertorama**. Pluck scrolls it for you, a step
-at a time, and joins the steps into one tall image. It stops by itself at the
-end; move the mouse to stop sooner and keep what it has so far.
-
-When it's done you can **Save image** (PNG) or **Save PDF** (split into pages
-between lines of text, with the text searchable and selectable), both into
-Pictures › Vertorama, or **Copy image** and **Copy text**.
-
-Bars that stay put while the rest scrolls, like a chat's title bar and message
-box, appear once, at the top and bottom. Joins are found by matching the
-pixels of each step against the last one, so a blinking cursor or an animated
-picture doesn't throw it off. If two steps can't be matched it goes back and
-takes smaller ones, and if they still can't be, it stops there instead of
-guessing.
-
-Vertorama needs X11 for now: Wayland doesn't let one app scroll another's
-window. Scrolling it yourself on Wayland is planned.
 
 Everything runs on your computer. Nothing is sent anywhere unless you press
 Search or open a link.
@@ -61,16 +39,15 @@ What it needs, if you'd rather install it first:
 
 | Distro | Command |
 | --- | --- |
-| Linux Mint, Ubuntu, Debian, Pop!_OS | `sudo apt install tesseract-ocr python3-gi python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1 python3-xlib` |
-| Fedora | `sudo dnf install tesseract tesseract-langpack-eng python3-gobject python3-pillow gtk3 webkit2gtk4.1 python3-xlib` |
-| Arch, Manjaro | `sudo pacman -S --needed tesseract tesseract-data-eng python-gobject python-pillow gtk3 webkit2gtk-4.1 python-xlib` |
-| openSUSE | `sudo zypper install tesseract-ocr tesseract-ocr-traineddata-english python3-gobject python3-Pillow typelib-1_0-Gtk-3_0 typelib-1_0-WebKit2-4_1 python3-python-xlib` |
+| Linux Mint, Ubuntu, Debian, Pop!_OS | `sudo apt install tesseract-ocr python3-gi python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1` |
+| Fedora | `sudo dnf install tesseract tesseract-langpack-eng python3-gobject python3-pillow gtk3 webkit2gtk4.1` |
+| Arch, Manjaro | `sudo pacman -S --needed tesseract tesseract-data-eng python-gobject python-pillow gtk3 webkit2gtk-4.1` |
+| openSUSE | `sudo zypper install tesseract-ocr tesseract-ocr-traineddata-english python3-gobject python3-Pillow typelib-1_0-Gtk-3_0 typelib-1_0-WebKit2-4_1` |
 
 The setup script adds Pluck to your apps menu, starts it quietly at login so
 the shortcut responds instantly, and sets **Super+Shift+T** (Super is the
 Windows key) on Cinnamon, GNOME, Budgie, MATE, Xfce and KDE. On other
-desktops it tells you what to bind. (python-xlib is only for Vertorama on
-X11.) `install-integration.sh --remove` undoes
+desktops it tells you what to bind. `install-integration.sh --remove` undoes
 all of it.
 
 Works on X11 and Wayland. On X11 Pluck reads the screen directly; on Wayland
@@ -126,14 +103,13 @@ pluck/
   engine.py      OCR: prepare, recognise, positions, fixes, links and numbers
   capture.py     the screenshot: X11 directly, or the portal on Wayland
   main.py        the app: the full-screen overlay, clipboard, actions
-  bridge.py      a window holding one of the web pages, and how they talk
-  vertorama.py   scrolling and capturing, PDF pages, text of a tall image
-  stitch.py      joining the steps: finding each shift, fixed bars
-  web/           the overlay and the Vertorama window (HTML, CSS, JS, Inter font)
+  web/           the overlay (HTML, CSS, JS, Inter font)
 tools/
   integrate.py   setup for any common distro and desktop
 tests/           python3 -m unittest discover -s tests
 ```
+
+
 
 ## License
 

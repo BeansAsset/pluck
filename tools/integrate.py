@@ -62,13 +62,13 @@ def distro_family(os_release):
 PACKAGES = {
     # what Pluck needs -> package name in each family
     "debian": {"tesseract": "tesseract-ocr", "gi": "python3-gi", "pil": "python3-pil",
-               "gtk": "gir1.2-gtk-3.0", "webkit": "gir1.2-webkit2-4.1", "xlib": "python3-xlib"},
+               "gtk": "gir1.2-gtk-3.0", "webkit": "gir1.2-webkit2-4.1"},
     "fedora": {"tesseract": "tesseract tesseract-langpack-eng", "gi": "python3-gobject", "pil": "python3-pillow",
-               "gtk": "gtk3", "webkit": "webkit2gtk4.1", "xlib": "python3-xlib"},
+               "gtk": "gtk3", "webkit": "webkit2gtk4.1"},
     "arch": {"tesseract": "tesseract tesseract-data-eng", "gi": "python-gobject", "pil": "python-pillow",
-             "gtk": "gtk3", "webkit": "webkit2gtk-4.1", "xlib": "python-xlib"},
+             "gtk": "gtk3", "webkit": "webkit2gtk-4.1"},
     "suse": {"tesseract": "tesseract-ocr tesseract-ocr-traineddata-english", "gi": "python3-gobject",
-             "pil": "python3-Pillow", "gtk": "typelib-1_0-Gtk-3_0", "webkit": "typelib-1_0-WebKit2-4_1", "xlib": "python3-python-xlib"},
+             "pil": "python3-Pillow", "gtk": "typelib-1_0-Gtk-3_0", "webkit": "typelib-1_0-WebKit2-4_1"},
 }
 INSTALL = {"debian": "sudo apt install", "fedora": "sudo dnf install",
            "arch": "sudo pacman -S --needed", "suse": "sudo zypper install"}
@@ -107,17 +107,7 @@ def missing_requirements():
         missing.append("webkit")
     if not _has_pil():
         missing.append("pil")
-    if os.environ.get("XDG_SESSION_TYPE") != "wayland" and not _has_xlib():
-        missing.append("xlib")     # Vertorama scrolls other windows through it (X11)
     return missing
-
-
-def _has_xlib():
-    try:
-        import Xlib  # noqa: F401
-        return True
-    except ImportError:
-        return False
 
 
 def _has_pil():
@@ -275,7 +265,7 @@ def check():
         print(f"Install them with:\n\n    {cmd}\n")
     else:
         print("Install these with your package manager: Tesseract OCR with English, Python GObject, "
-              "Pillow, GTK 3, WebKitGTK (4.1 or 4.0) and, on X11, python-xlib.")
+              "Pillow, GTK 3 and WebKitGTK (4.1 or 4.0).")
     print("Then run this again.")
     return False
 
