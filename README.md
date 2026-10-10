@@ -5,6 +5,17 @@ photo, a game, a PDF that's really an image.
 
 ![Pluck reading a command from a paused tutorial video](docs/screenshot.png)
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/select.png" alt="Selecting part of a line with the mouse, right on the original text"></td>
+    <td width="50%"><img src="docs/edit.png" alt="Checking and editing what was read before copying"></td>
+  </tr>
+  <tr>
+    <td>Select part of it with the mouse, right on the original.</td>
+    <td>Check and fix what was read before copying.</td>
+  </tr>
+</table>
+
 Press **Super+Shift+T**. The screen freezes (so moving video holds still) and
 dims; drag over what you want. Pluck reads it and lays the text invisibly over
 the original pixels, so you can select part of it with the mouse, or:
