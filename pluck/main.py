@@ -187,8 +187,7 @@ class Overlay(Gtk.Window):
                 region, x0, y0 = engine.crop(shot, x, y, w, h)
                 result = engine.recognize(region)
                 lines = [{"words": [{"text": wd.text, "x": wd.x + x0, "y": wd.y + y0, "w": wd.w,
-                                     "h": wd.h, "conf": wd.conf, "space": wd.space} for wd in line.words],
-                          "rtl": False}
+                                     "h": wd.h, "conf": wd.conf, "space": wd.space} for wd in line.words]}
                          for line in result.lines]
                 text = result.text
                 out = {"lines": lines, "text": text, "findings": engine.findings(text),

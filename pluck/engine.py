@@ -8,9 +8,7 @@ dark, 11 to 16 px):
   * grayscale, and flip light-on-dark to dark-on-light
   * page mode 6 (one block of text): as accurate as automatic layout here,
     and steadier on single lines
-  * English only for now. (Measured: English alone reads Latin text at
-    99.7%, English+Arabic at 99.3%; Arabic reading worked in testing and can
-    come back as a setting later.)
+  * English only for now; other languages can come later as a setting
 
 No GTK in here, so it can be tested on its own.
 """
@@ -24,7 +22,6 @@ from dataclasses import dataclass, field
 from PIL import Image, ImageOps, ImageStat
 
 SCALE = 2
-ARABIC = re.compile(r"[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]")
 
 
 @dataclass
@@ -117,12 +114,9 @@ def parse_tsv(tsv, scale=SCALE):
             Word(text, conf, left / scale, top / scale, width / scale, height / scale))
     ordered = [lines[k] for k in sorted(lines)]
     for line in ordered:
-        # Reading order: right to left for lines that are mostly Arabic.
-        rtl = sum(1 for w in line.words if ARABIC.search(w.text)) > len(line.words) / 2
-        line.words.sort(key=lambda w: -w.x if rtl else w.x)
-        if not rtl:
-            join_touching(line.words)
-            fix_code_case(line.words)
+        line.words.sort(key=lambda w: w.x)
+        join_touching(line.words)
+        fix_code_case(line.words)
     return ordered
 
 
