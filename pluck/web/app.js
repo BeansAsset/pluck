@@ -47,6 +47,7 @@ const ICONS = {
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/>',
   phone: '<path d="M6 3.5h3l1.5 4.5-2 1.5a11 11 0 0 0 6 6l1.5-2 4.5 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4 5.5a2 2 0 0 1 2-2z"/>',
+  tall: '<rect x="6" y="3.5" width="12" height="17" rx="2"/><path d="M9.5 9.5 12 12l2.5-2.5M9.5 14 12 16.5l2.5-2.5"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.5"/>',
 };
 function icon(name) {
@@ -61,6 +62,7 @@ let drag = null;          // {x0, y0} while the mouse is down
 let region = null;        // {x, y, w, h} of the last selection
 let result = null;        // what Python read
 let readToken = 0;
+let canScroll = false;    // Vertorama needs X11 to scroll other windows
 
 function reset() {
   drag = null; region = null; result = null; readToken++;
@@ -129,7 +131,10 @@ async function read(r) {
   document.body.className = "done";
   result = res;
   if (res.error) { showBar([note(res.error), closeButton()]); return; }
-  if (!res.text.trim()) { showBar([note("No text found here. Try a bigger area."), closeButton()]); return; }
+  if (!res.text.trim()) {
+    showBar([note("No text found here."), canScroll && vertoramaButton(), closeButton()]);
+    return;
+  }
   layWords(res.lines);
   showBar(actions(res));
 }
@@ -185,6 +190,17 @@ function button(label, iconName, onclick, primary = false, title = null) {
     iconName && icon(iconName), h("span", { text: label }));
 }
 
+function vertoramaButton() {
+  return button("Vertorama", "tall", startVertorama, false,
+    "Scroll this area to the end and capture all of it as one tall image");
+}
+
+async function startVertorama() {
+  const r = region;
+  const res = await call("vertorama", r.x, r.y, r.w, r.h);
+  if (res && res.error) showBar([note(res.error), closeButton()]);
+}
+
 function actions(res) {
   const items = [button("Copy text", "copy", copyAndClose, true)];
   for (const [kind, value] of res.findings.slice(0, 3)) {
@@ -199,6 +215,7 @@ function actions(res) {
   }
   items.push(button("Search", "search", () => call("open", "search", selectedText().slice(0, 300))));
   items.push(h("span", { class: "sep" }));
+  if (canScroll) items.push(vertoramaButton());
   items.push(button("Show text", "eye", toggleShow));
   items.push(button("Edit", "edit", openEditor));
   return items;
@@ -234,7 +251,7 @@ function openEditor() {
 function showBar(children) {
   const bar = $("#bar");
   bar.classList.remove("editing");
-  bar.replaceChildren(...children);
+  bar.replaceChildren(...children.filter(Boolean));
   bar.hidden = false;
   placeBar();
 }
@@ -278,5 +295,6 @@ document.addEventListener("keydown", (e) => {
 
 (async () => {
   const first = await call("ready");
-  if (first) showShot(first);
+  canScroll = Boolean(first && first.vertorama);
+  if (first && first.shot) showShot(first.shot);
 })();
