@@ -27,20 +27,37 @@ Search or open a link.
 
 ## Install
 
-On Linux Mint, Ubuntu or Debian:
+Get the code, then run the setup script. It checks what Pluck needs and, if
+anything is missing, shows the exact command for your distro:
 
 ```sh
-sudo apt install tesseract-ocr python3-gi python3-pil gir1.2-webkit2-4.1
 git clone https://github.com/BeansAsset/pluck.git ~/pluck
 ~/pluck/install-integration.sh
 ```
 
-The last step adds Pluck to your apps menu, starts it quietly at login so the
-shortcut responds instantly, and sets **Super+Shift+T** (Super is the Windows
-key) on Cinnamon. Elsewhere, bind a shortcut to `~/pluck/pluck-app` in your
-keyboard settings. `install-integration.sh --remove` undoes all of it.
+What it needs, if you'd rather install it first:
 
-Reads English for now. Works on X11, which is Linux Mint's default.
+| Distro | Command |
+| --- | --- |
+| Linux Mint, Ubuntu, Debian, Pop!_OS | `sudo apt install tesseract-ocr python3-gi python3-pil gir1.2-gtk-3.0 gir1.2-webkit2-4.1` |
+| Fedora | `sudo dnf install tesseract tesseract-langpack-eng python3-gobject python3-pillow gtk3 webkit2gtk4.1` |
+| Arch, Manjaro | `sudo pacman -S --needed tesseract tesseract-data-eng python-gobject python-pillow gtk3 webkit2gtk-4.1` |
+| openSUSE | `sudo zypper install tesseract-ocr tesseract-ocr-traineddata-english python3-gobject python3-Pillow typelib-1_0-Gtk-3_0 typelib-1_0-WebKit2-4_1` |
+
+The setup script adds Pluck to your apps menu, starts it quietly at login so
+the shortcut responds instantly, and sets **Super+Shift+T** (Super is the
+Windows key) on Cinnamon, GNOME, Budgie, MATE, Xfce and KDE. On other
+desktops it tells you what to bind. `install-integration.sh --remove` undoes
+all of it.
+
+Works on X11 and Wayland. On X11 Pluck reads the screen directly; on Wayland
+it uses the desktop's screenshot portal, and some desktops ask once whether
+Pluck may take screenshots. It freezes the monitor your pointer is on, and
+handles HiDPI and fractional scaling.
+
+Tested on Linux Mint 22 (Cinnamon, X11), including the portal route. Other
+desktops and distros are covered by the setup script's tests but not yet by
+hand; reports are welcome. Reads English for now.
 
 ## Run it by hand
 
@@ -73,6 +90,7 @@ Known limits: a lone `l` can come out as `|`, and very small or stylised text
 
 ## How it works
 
+`capture.py` takes the screenshot and cuts it to the monitor you're on.
 `engine.py` crops the selected area from the frozen screen, enlarges it 2x,
 turns it into dark-on-light grayscale and runs Tesseract, which returns each
 word with its position. The page (`web/`) places a transparent copy of every
@@ -82,14 +100,16 @@ text stays on the clipboard after the overlay closes.
 
 ```
 pluck/
-  engine.py   OCR: prepare, recognise, positions, fixes, links and numbers
-  main.py     the app: capture, the full-screen overlay, clipboard, actions
-  web/        the overlay (HTML, CSS, JS, Inter font)
-tests/        python3 -m unittest discover -s tests
+  engine.py      OCR: prepare, recognise, positions, fixes, links and numbers
+  capture.py     the screenshot: X11 directly, or the portal on Wayland
+  main.py        the app: the full-screen overlay, clipboard, actions
+  web/           the overlay (HTML, CSS, JS, Inter font)
+tools/
+  integrate.py   setup for any common distro and desktop
+tests/           python3 -m unittest discover -s tests
 ```
 
-Wayland needs the desktop's screenshot portal instead of a direct capture;
-not done yet.
+
 
 ## License
 

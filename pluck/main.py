@@ -19,12 +19,13 @@ import gi
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-gi.require_version("WebKit2", "4.1")
+try:
+    gi.require_version("WebKit2", "4.1")
+except ValueError:   # older distros ship only the 4.0 API, which Pluck also works with
+    gi.require_version("WebKit2", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, WebKit2  # noqa: E402
 
-from PIL import Image  # noqa: E402
-
-from . import APP_ID, APP_NAME, engine  # noqa: E402
+from . import APP_ID, APP_NAME, capture, engine  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -38,18 +39,6 @@ def log(*parts):
         print("pluck:", *parts, flush=True)
 
 
-def capture_screen():
-    """The whole screen as a PIL image, taken before Pluck shows anything."""
-    root = Gdk.get_default_root_window()
-    w, h = root.get_width(), root.get_height()
-    pixbuf = Gdk.pixbuf_get_from_window(root, 0, 0, w, h)
-    if pixbuf is None:
-        raise RuntimeError("couldn't capture the screen")
-    mode = "RGBA" if pixbuf.get_has_alpha() else "RGB"
-    image = Image.frombytes(mode, (w, h), pixbuf.get_pixels(), "raw", mode, pixbuf.get_rowstride())
-    return image.convert("RGB")
-
-
 class Overlay(Gtk.Window):
     """A full-screen window showing the frozen screen, drawn by web/."""
 
@@ -61,7 +50,8 @@ class Overlay(Gtk.Window):
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
         self.set_keep_above(True)
-        self.shot = None          # PIL image of the frozen screen
+        self.frame = None         # capture.Frame: the frozen monitor, and its scale
+        self.capturing = False
         self.page_ready = False
         self.pending_show = False
         self.view = self._make_view()
@@ -124,13 +114,19 @@ class Overlay(Gtk.Window):
 
     def start(self):
         """Freeze the screen and show it, once the page has drawn the image."""
-        if self.get_visible():
+        if self.get_visible() or self.capturing:
             return
-        try:
-            self.shot = capture_screen()
-        except RuntimeError as e:
-            self.app.notify("Pluck couldn't capture the screen", str(e))
-            return
+        self.capturing = True
+        log("capturing with", capture.method())
+        capture.capture(self._captured, self._capture_failed)
+
+    def _capture_failed(self, message):
+        self.capturing = False
+        self.app.notify("Pluck couldn't capture the screen", message)
+
+    def _captured(self, frame):
+        self.capturing = False
+        self.frame = frame
         os.makedirs(CACHE, exist_ok=True)
         # A new name each time: local file URLs can't carry a ?query to
         # defeat caching, so the name itself has to change.
@@ -141,24 +137,27 @@ class Overlay(Gtk.Window):
                 except OSError:
                     pass
         path = os.path.join(CACHE, f"screen-{time.time_ns()}.png")
-        self.shot.save(path, compress_level=1)
+        frame.image.save(path, compress_level=1)
         self.pending_show = True
-        url = "file://" + urllib.parse.quote(path)
-        log("captured", path, "page ready:", self.page_ready)
+        _x, _y, w, h = frame.logical
+        shot = {"url": "file://" + urllib.parse.quote(path), "width": w, "height": h}
+        log("captured", path, frame.image.size, "logical", frame.logical, "scale", frame.scale)
         if self.page_ready:
-            self.emit("shot", {"url": url, "width": self.shot.width, "height": self.shot.height})
+            self.emit("shot", shot)
         else:
-            self._first_url = url
+            self._first_shot = shot
 
     def _show_now(self):
         log("drawn; showing" if self.pending_show else "drawn, nothing pending")
         if not self.pending_show:
             return
         self.pending_show = False
-        self.move(0, 0)
-        self.resize(self.shot.width, self.shot.height)
+        x, y, w, h = self.frame.logical
+        if not capture.is_wayland():
+            self.move(x, y)
+        self.resize(w, h)
         self.show_all()
-        self.fullscreen()
+        self.fullscreen_on_monitor(self.get_screen(), self.frame.monitor)
         self.present_with_time(Gtk.get_current_event_time() or Gdk.CURRENT_TIME)
         GLib.timeout_add(80, lambda: (self.get_window() and self.get_window().focus(Gdk.CURRENT_TIME), False)[1])
 
@@ -166,28 +165,28 @@ class Overlay(Gtk.Window):
 
     def cmd_ready(self, _id):
         self.page_ready = True
-        url = getattr(self, "_first_url", None)
-        if url and self.shot is not None:
-            return {"url": url, "width": self.shot.width, "height": self.shot.height}
-        return None
+        return getattr(self, "_first_shot", None) if self.frame is not None else None
 
     def cmd_drawn(self, _id):
         """The page has painted the frozen screen: safe to show the window."""
         self._show_now()
 
     def cmd_read(self, req_id, x, y, w, h):
-        """OCR a region (in screen pixels). Answers later, from a thread."""
-        shot = self.shot
-        if shot is None or w < 4 or h < 4:
+        """OCR a region given in the page's (logical) pixels. Answers later,
+        from a thread, with word boxes back in logical pixels."""
+        frame = self.frame
+        if frame is None or w < 4 or h < 4:
             return {"lines": [], "text": "", "findings": []}
+        shot, k = frame.image, frame.scale
 
         def work():
             started = time.monotonic()
             try:
-                region, x0, y0 = engine.crop(shot, x, y, w, h)
+                region, x0, y0 = engine.crop(shot, x * k, y * k, w * k, h * k)
                 result = engine.recognize(region)
-                lines = [{"words": [{"text": wd.text, "x": wd.x + x0, "y": wd.y + y0, "w": wd.w,
-                                     "h": wd.h, "conf": wd.conf, "space": wd.space} for wd in line.words]}
+                lines = [{"words": [{"text": wd.text, "x": (wd.x + x0) / k, "y": (wd.y + y0) / k,
+                                     "w": wd.w / k, "h": wd.h / k, "conf": wd.conf, "space": wd.space}
+                                    for wd in line.words]}
                          for line in result.lines]
                 text = result.text
                 out = {"lines": lines, "text": text, "findings": engine.findings(text),
@@ -218,7 +217,7 @@ class Overlay(Gtk.Window):
     def cmd_close(self, _id):
         self.unfullscreen()
         self.hide()
-        self.shot = None
+        self.frame = None
         return True
 
 
