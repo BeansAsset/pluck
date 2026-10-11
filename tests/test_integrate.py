@@ -47,6 +47,9 @@ class DistroTest(unittest.TestCase):
         self.assertEqual(integrate.install_command("fedora", ["pil"]), "sudo dnf install python3-pillow")
         self.assertIsNone(integrate.install_command(None, ["pil"]))
         self.assertIsNone(integrate.install_command("debian", []))
+        # ZBar, for QR codes, has a package everywhere
+        for family in integrate.PACKAGES:
+            self.assertIn("zbar", integrate.install_command(family, ["zbar"]))
 
 
 class DesktopTest(unittest.TestCase):

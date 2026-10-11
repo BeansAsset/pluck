@@ -100,3 +100,18 @@ body.showtext .line span { color: var(--text); background: rgba(16, 16, 18, 0.88
 }
 #bar textarea:focus { border-color: rgba(244, 242, 239, 0.3); }
 #bar .row { display: flex; justify-content: flex-end; gap: 6px; }
+
+/* QR codes found on the screen */
+#codes { position: fixed; inset: 0; pointer-events: none; }
+.qr {
+  position: absolute; pointer-events: auto; cursor: pointer; border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 5px rgba(0, 0, 0, 0.35);
+  background: transparent; animation: found 600ms var(--ease) both;
+}
+.qr:hover { background: rgba(255, 255, 255, 0.12); }
+@keyframes found { from { opacity: 0; transform: scale(1.08); } }
+body.selecting .qr, body.done .qr { opacity: 0.35; }
+#bar .url { padding: 0 6px 0 4px; white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+#bar .url b { font-weight: 650; color: var(--text); }
+#bar .url .dim { color: var(--t2); }
+#bar > svg { margin-left: 8px; opacity: 0.7; flex: none; }

@@ -62,14 +62,16 @@ def distro_family(os_release):
 PACKAGES = {
     # what Pluck needs -> package name in each family
     "debian": {"tesseract": "tesseract-ocr", "gi": "python3-gi", "pil": "python3-pil",
-               "gtk": "gir1.2-gtk-3.0", "webkit": "gir1.2-webkit2-4.1"},
+               "gtk": "gir1.2-gtk-3.0", "webkit": "gir1.2-webkit2-4.1", "zbar": "libzbar0"},
     "fedora": {"tesseract": "tesseract tesseract-langpack-eng", "gi": "python3-gobject", "pil": "python3-pillow",
-               "gtk": "gtk3", "webkit": "webkit2gtk4.1"},
+               "gtk": "gtk3", "webkit": "webkit2gtk4.1", "zbar": "zbar-libs"},
     "arch": {"tesseract": "tesseract tesseract-data-eng", "gi": "python-gobject", "pil": "python-pillow",
-             "gtk": "gtk3", "webkit": "webkit2gtk-4.1"},
+             "gtk": "gtk3", "webkit": "webkit2gtk-4.1", "zbar": "zbar"},
     "suse": {"tesseract": "tesseract-ocr tesseract-ocr-traineddata-english", "gi": "python3-gobject",
-             "pil": "python3-Pillow", "gtk": "typelib-1_0-Gtk-3_0", "webkit": "typelib-1_0-WebKit2-4_1"},
+             "pil": "python3-Pillow", "gtk": "typelib-1_0-Gtk-3_0", "webkit": "typelib-1_0-WebKit2-4_1",
+             "zbar": "libzbar0"},
 }
+OPTIONAL = {"zbar": "QR codes"}   # Pluck works without these, minus that feature
 INSTALL = {"debian": "sudo apt install", "fedora": "sudo dnf install",
            "arch": "sudo pacman -S --needed", "suse": "sudo zypper install"}
 
@@ -254,18 +256,27 @@ SHORTCUTS = {"cinnamon": cinnamon, "gnome": gnome, "mate": mate, "xfce": xfce, "
 
 # -- commands ------------------------------------------------------------------------------
 
+def missing_optional():
+    import ctypes.util
+    return [] if ctypes.util.find_library("zbar") else ["zbar"]
+
+
 def check():
     missing = missing_requirements()
-    if not missing:
-        return True
     family = distro_family(read_os_release())
+    if not missing:
+        for extra in missing_optional():
+            cmd = install_command(family, [extra])
+            how = f": {cmd}" if cmd else " (install ZBar with your package manager)"
+            print(f"Optional: {OPTIONAL[extra]} need ZBar{how}")
+        return True
     cmd = install_command(family, missing)
     print(f"{NAME} needs a few things first.")
     if cmd:
         print(f"Install them with:\n\n    {cmd}\n")
     else:
         print("Install these with your package manager: Tesseract OCR with English, Python GObject, "
-              "Pillow, GTK 3 and WebKitGTK (4.1 or 4.0).")
+              "Pillow, GTK 3 and WebKitGTK (4.1 or 4.0). ZBar is optional, for QR codes.")
     print("Then run this again.")
     return False
 

@@ -25,7 +25,7 @@ except ValueError:   # older distros ship only the 4.0 API, which Pluck also wor
     gi.require_version("WebKit2", "4.0")
 from gi.repository import Gdk, Gio, GLib, Gtk, WebKit2  # noqa: E402
 
-from . import APP_ID, APP_NAME, capture, engine  # noqa: E402
+from . import APP_ID, APP_NAME, capture, engine, qr  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
@@ -146,6 +146,27 @@ class Overlay(Gtk.Window):
             self.emit("shot", shot)
         else:
             self._first_shot = shot
+        self._find_codes(frame, shot["url"])
+
+    def _find_codes(self, frame, shot_url):
+        """Look for QR codes on the frozen screen while it's being shown, and
+        hand them to the page as clickable areas (in logical pixels)."""
+        def work():
+            try:
+                codes = qr.find(frame.image)
+            except (OSError, ValueError) as e:
+                log("QR search failed:", e)
+                return
+            k = frame.scale
+            found = [{"x": c.x / k, "y": c.y / k, "w": c.w / k, "h": c.h / k, "data": c.data,
+                      **qr.describe(c.data)} for c in codes]
+            log("QR codes:", len(found))
+            def deliver():
+                self.codes = {"shot": shot_url, "codes": found}
+                self.emit("codes", self.codes)
+                return False
+            GLib.idle_add(deliver)
+        threading.Thread(target=work, daemon=True).start()
 
     def _show_now(self):
         log("drawn; showing" if self.pending_show else "drawn, nothing pending")
@@ -166,6 +187,10 @@ class Overlay(Gtk.Window):
     def cmd_ready(self, _id):
         self.page_ready = True
         return getattr(self, "_first_shot", None) if self.frame is not None else None
+
+    def cmd_codes(self, _id):
+        """The QR codes found so far, for a page that missed the push."""
+        return getattr(self, "codes", None)
 
     def cmd_drawn(self, _id):
         """The page has painted the frozen screen: safe to show the window."""
@@ -208,6 +233,8 @@ class Overlay(Gtk.Window):
             uri = "mailto:" + value
         elif kind == "link":
             uri = value if "://" in value else "https://" + value
+            if urllib.parse.urlsplit(uri).scheme not in ("http", "https"):
+                return False
         else:
             return False
         self.cmd_close(None)

@@ -47,6 +47,8 @@ const ICONS = {
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/>',
   phone: '<path d="M6 3.5h3l1.5 4.5-2 1.5a11 11 0 0 0 6 6l1.5-2 4.5 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4 5.5a2 2 0 0 1 2-2z"/>',
+  qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
+  wifi: '<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/>',
   eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.5"/>',
 };
 function icon(name) {
@@ -61,6 +63,8 @@ let drag = null;          // {x0, y0} while the mouse is down
 let region = null;        // {x, y, w, h} of the last selection
 let result = null;        // what Python read
 let readToken = 0;
+let shotUrl = null;       // the frozen screen being shown
+let codes = [];           // QR codes found on it
 
 function reset() {
   drag = null; region = null; result = null; readToken++;
@@ -74,6 +78,8 @@ function reset() {
 
 function showShot(shot) {
   reset();
+  shotUrl = shot.url;
+  setCodes([]);
   const img = $("#screen");
   img.onload = () => {
     img.style.width = `${shot.width}px`;
@@ -81,11 +87,82 @@ function showShot(shot) {
     // The image is decoded and in place: Python can show the window now.
     // (Not requestAnimationFrame: a hidden window never gets frames.)
     call("drawn");
+    call("codes").then((c) => { if (c && c.shot === shotUrl) setCodes(c.codes); });
   };
   img.onerror = () => console.log("pluck: couldn't load the frozen screen " + shot.url);
   img.src = shot.url;
 }
 on.shot = showShot;
+
+// ---- QR codes on the screen -----------------------------------------------------------
+
+/* Each code found on the frozen screen becomes a clickable outline. Clicking
+ * shows what's inside before anything is opened: for a link, the whole
+ * address with the site it really goes to in bold. */
+function setCodes(list) {
+  codes = list || [];
+  const box = $("#codes");
+  box.replaceChildren(...codes.map((c) => {
+    const el = h("button", { class: "qr", title: "QR code: click to see what's inside",
+      onclick: (e) => { e.stopPropagation(); openCode(c); } });
+    Object.assign(el.style, { left: `${c.x - 6}px`, top: `${c.y - 6}px`, width: `${c.w + 12}px`, height: `${c.h + 12}px` });
+    return el;
+  }));
+  $("#hint").textContent = codes.length
+    ? `Found ${codes.length === 1 ? "a QR code" : codes.length + " QR codes"}: click to open. Or drag over text. Esc to cancel.`
+    : "Drag over the text you want. Esc to cancel.";
+}
+on.codes = (data) => { if (data.shot === shotUrl) setCodes(data.codes); };
+
+function linkPreview(c) {
+  // https:// dimmed, the host with its real site in bold, then the rest dimmed.
+  const span = h("span", { class: "url", title: c.url });
+  const scheme = c.url.slice(0, c.url.indexOf("//") + 2);
+  const rest = c.url.slice(scheme.length);
+  const hostEnd = rest.search(/[/?#]|$/);
+  const host = rest.slice(0, hostEnd), path = rest.slice(hostEnd);
+  const cut = host.toLowerCase().lastIndexOf(c.site);
+  span.append(h("span", { class: "dim", text: scheme }));
+  if (cut >= 0) span.append(host.slice(0, cut), h("b", { text: host.slice(cut) }));
+  else span.append(h("b", { text: host }));
+  if (path) span.append(h("span", { class: "dim", text: path.length > 48 ? path.slice(0, 47) + "…" : path }));
+  return span;
+}
+
+function codeActions(c) {
+  const items = [];
+  if (c.kind === "link") {
+    items.push(icon("qr"), linkPreview(c));
+    if (!c.secure) items.push(note("Not encrypted (http)"));
+    if (c.unusual) items.push(note("Unusual letters in this address"));
+    items.push(h("span", { class: "sep" }),
+      button("Open", "link", () => call("open", "link", c.url), true),
+      button("Copy link", "copy", () => copyAndClose(c.url)));
+  } else if (c.kind === "wifi") {
+    items.push(icon("wifi"), h("span", { class: "url" }, "Wi-Fi ", h("b", { text: c.network || "network" })),
+      h("span", { class: "sep" }));
+    if (c.password) items.push(button("Copy password", "copy", () => copyAndClose(c.password), true));
+    items.push(button("Copy name", "copy", () => copyAndClose(c.network)));
+  } else if (c.kind === "email") {
+    items.push(icon("qr"), h("span", { class: "url", text: c.value }), h("span", { class: "sep" }),
+      button("Email", "mail", () => call("open", "email", c.value), true),
+      button("Copy", "copy", () => copyAndClose(c.value)));
+  } else {
+    const shown = c.value.length > 70 ? c.value.slice(0, 69) + "…" : c.value;
+    items.push(icon("qr"), h("span", { class: "url", text: shown, title: c.value }), h("span", { class: "sep" }),
+      button(c.kind === "phone" ? "Copy number" : "Copy text", "copy", () => copyAndClose(c.value), true));
+  }
+  return items;
+}
+
+function openCode(c) {
+  reset();
+  region = { x: c.x, y: c.y, w: c.w, h: c.h };
+  result = { text: c.data, lines: [], findings: [] };   // Enter and Ctrl+C copy what's inside
+  document.body.className = "done";
+  setRegion(region);
+  showBar(codeActions(c));
+}
 
 // ---- selecting -------------------------------------------------------------------------
 
@@ -97,7 +174,7 @@ function setRegion(r) {
 }
 
 document.addEventListener("mousedown", (e) => {
-  if (e.button !== 0 || e.target.closest("#bar") || e.target.closest(".line")) return;
+  if (e.button !== 0 || e.target.closest("#bar") || e.target.closest(".line") || e.target.closest(".qr")) return;
   reset();
   drag = { x0: e.clientX, y0: e.clientY };
   document.body.classList.add("selecting");
